@@ -1,39 +1,44 @@
-import requests, os
-from datetime import datetime
+import os, requests, time
+from datetime import datetime, timezone
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+BOT = os.environ["TELEGRAM_BOT_TOKEN"]
+CHAT = os.environ["TELEGRAM_CHAT_ID"]
 
 def send(msg):
-    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-        json={"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"})
+    requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage",
+        data={"chat_id": CHAT, "text": msg, "parse_mode": "Markdown", "disable_web_page_preview": True})
 
-def scan():
+def get_pairs():
+    # trending solana pairs - free, no key
     try:
-        r = requests.get("https://api.dexscreener.com/token-boosts/top/v1", timeout=15).json()
+        r = requests.get("https://api.dexscreener.com/latest/dex/search/?q=solana", timeout=15).json()
+        return r.get('pairs', [])[:50]
     except:
-        send("⚠️ Scanner error: DexScreener down")
-        return
+        return []
 
-    alerts = 0
-    for t in r[:20]:
-        if t.get("chainId")!= "solana":
-            continue
-        try:
-            ca = t["tokenAddress"]
-            d = requests.get(f"https://api.dexscreener.com/latest/dex/tokens/{ca}", timeout=10).json()
-            p = d["pairs"][0]
-            vol = float(p["volume"]["h24"] or 0)
-            chg = float(p["priceChange"]["m5"] or 0)
-            if vol > 10000 and chg > 20:
-                alerts += 1
-                send(f"🚨 *SURGE* {p['baseToken']['symbol']}\n+{chg:.1f}% (5m) | Vol ${vol:,.0f}\n`{ca}`\nhttps://dexscreener.com/solana/{ca}")
-        except:
-            continue
+now = datetime.now(timezone.utc).strftime("%H:%M UTC")
+pairs = get_pairs()
+found = 0
 
-    now = datetime.utcnow().strftime("%H:%M UTC")
-    if alerts == 0:
-        send(f"✅ Checked {now} — No surges found\nBot is working.")
-    print(f"Done. Alerts: {alerts}")
+for p in pairs:
+    try:
+        if p.get('chainId') != 'solana': continue
+        
+        # Filters to kill fake pumps like INU TOWN
+        liq = float(p.get('liquidity', {}).get('usd', 0) or 0)
+        if liq < 5000: continue  # must have real liquidity
 
-scan()
+        m5 = p.get('priceChange', {}).get('m5', 0)
+        if m5 < 15: continue  # surge at least +15% in 5m
+
+        tx = p.get('txns', {}).get('m5', {})
+        buys = tx.get('buys', 0)
+        sells = tx.get('sells', 0)
+        total_tx = buys + sells
+        if total_tx < 15: continue  # too quiet
+        if buys <= sells: continue  # we want more buys than sells - INU TOWN was 1 vs 5
+
+        vol_m5 = float(p.get('volume', {}).get('m5', 0) or 0)
+        if vol_m5 < 5000: continue  # $62 volume like INU TOWN now will be skipped
+
+        age_ms
