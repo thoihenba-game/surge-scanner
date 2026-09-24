@@ -3,8 +3,8 @@ import requests
 import time
 from datetime import datetime, timezone
 
-BOT = os.environ["TELEGRAM_BOT_TOKEN"]
-CHAT = os.environ["TELEGRAM_CHAT_ID"]
+BOT = os.environ["BOT_TOKEN"]
+CHAT = os.environ["CHAT_ID"]
 
 def send(msg):
     requests.post(
