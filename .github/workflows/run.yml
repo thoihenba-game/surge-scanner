@@ -12,7 +12,8 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install requests
-      - run: python scanner.py
+      - name: Run python scanner.py
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: python scanner.py
